@@ -167,6 +167,11 @@ The repo tracks the pipeline + catalog (titles, source URLs, sizes, sha256), so
 the collection is reproducible and shareable; add a torrent or IPFS step when
 you actually want to ship bytes.
 
+Three guards keep it that way: media extensions plus `data/*` in `.gitignore`,
+a `pre-commit` hook in `.githooks/` that refuses media or files over 5 MiB even
+when force-added, and a `no-media` GitHub Action that fails the build if such a
+file ever reaches the tree.
+
 ## Notes / next
 
 See `SOURCES.md` for the source shortlist and which adapters still need wiring
