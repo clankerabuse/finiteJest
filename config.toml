@@ -1,11 +1,11 @@
 # finiteJest — collection parameters. Everything here is a default; CLI flags win.
 
 [general]
-budget_gib    = 15       # hard ceiling on downloaded media
+budget_gib    = 10       # hard ceiling on downloaded media
 target_count  = 100      # stop after N videos
 max_attempts  = 3
 min_duration_s = 3
-max_duration_s = 3600    # reject anything over an hour
+max_duration_s = 300     # hard cap: nothing over 5 minutes gets in
 
 [video]
 # 1080p h264/aac when offered (remuxes to mp4 without re-encoding), else best ≤1080p

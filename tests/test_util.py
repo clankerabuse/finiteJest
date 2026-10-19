@@ -30,7 +30,8 @@ for a, b, same in cases:
 # --- gate
 cfg = config.load()
 keep = {"duration": 300, "ext": "mp4", "vcodec": "avc1", "filesize": 50 * 1024 ** 2}
-assert pipeline.gate(keep, cfg)[0] == "keep"
+assert pipeline.gate(keep, cfg)[0] == "keep"           # exactly 5:00 is allowed
+assert pipeline.gate({**keep, "duration": 301}, cfg)[0] == "reject"
 assert pipeline.gate({**keep, "duration": 7200}, cfg)[0] == "reject"
 assert pipeline.gate({**keep, "is_live": True}, cfg)[0] == "reject"
 assert pipeline.gate({**keep, "ext": "m4a", "vcodec": "none"}, cfg)[0] == "reject"

@@ -2,7 +2,7 @@
 
 A farm for strange video. Point it at feeds, archives and playlists; it keeps a
 manifest, downloads the good ones, and hard-stops at a size and count budget.
-Goal for v1: **~100 videos / ~15 GiB**, from as many different sources as possible.
+Goal for v1: **~100 videos / ~10 GiB**, from as many different sources as possible.
 
 ```
 harvest ─► candidate rows ─► probe (metadata + quality gate) ─► download ─► verify
@@ -18,7 +18,7 @@ bin/fj init
 bin/fj harvest archive --collection prelinger --limit 50
 bin/fj harvest playlist "https://www.youtube.com/@SomeWeirdChannel/videos" --limit 40
 bin/fj fetch --dry-run          # see what passes the gate
-bin/fj fetch                    # download until 100 videos / 15 GiB
+bin/fj fetch                    # download until 100 videos / 10 GiB
 bin/fj stats
 bin/fj export                   # writes collection/index.{md,json} — commit these
 ```
@@ -52,10 +52,11 @@ bin/fj add --file queue/links.txt --source list
 
 ## Quality gate (config.toml)
 
-- duration between 3s and 60m (most weird-video finds are short)
+- duration between 3s and 5m (the cap is enforced twice: at probe, and again
+  from ffprobe after download for extractors that hide the runtime)
 - nothing live, private, DRM'd or audio-only
 - estimated file ≤ 800 MiB, format capped at 1080p h264/aac → mp4 remux
-- per-run budget: refuses anything that would push the collection over 15 GiB
+- per-run budget: refuses anything that would push the collection over 10 GiB
 - exact-duplicate bytes (sha256) are discarded even if the link differs
 
 Everything the gate rejects stays in the db with a reason, so `fj ls -e` is a
@@ -82,14 +83,14 @@ Env vars `FJ_REDDIT_ID` / `FJ_REDDIT_SECRET` override the file.
 ```
 config.toml        budgets, format, creds
 fj/                the pipeline (cli, db, ytdlp, gate, sources/)
-data/videos/<src>/ media, gitignored  (~150 MB avg at 100 vids / 15 GiB)
+data/videos/<src>/ media, gitignored  (10 GiB cap, ~100 MB avg)
 data/meta/         yt-dlp .info.json sidecars
 data/finitejest.db manifest (sqlite)
 collection/        index.md + index.json — the part that goes in git
 queue/             drop-in link lists
 ```
 
-Media is deliberately **not** in git: 15 GiB of mp4 in a repo is unusable.
+Media is deliberately **not** in git: 10 GiB of mp4 in a repo is unusable.
 The repo tracks the pipeline + catalog (titles, source URLs, sizes, sha256), so
 the collection is reproducible and shareable; add a torrent or IPFS step when
 you actually want to ship bytes.

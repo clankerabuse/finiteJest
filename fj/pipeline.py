@@ -119,7 +119,7 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
             print(f"\nreached target of {target} videos.")
             break
         remaining = budget - used
-        if remaining <= 256 * 1024 ** 2:
+        if remaining <= min(64 * 1024 ** 2, budget * 0.02):
             print(f"\nbudget nearly full ({human_size(used)} / {human_size(budget)}).")
             break
 
@@ -200,6 +200,18 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
             continue
 
         probe_meta = ffprobe(res.path)
+
+        # second duration check: HLS/unknown-length extractors only reveal the
+        # real runtime once the file is on disk
+        real_dur = probe_meta.get("duration") or row["duration"]
+        max_dur = int(cfg["general"]["max_duration_s"])
+        if real_dur and real_dur > max_dur:
+            os.unlink(res.path)
+            db.update(row["id"], status="rejected", duration=real_dur,
+                      error=f"too long after download ({real_dur/60:.1f}m > {max_dur/60:.0f}m)")
+            print(f"  drop  #{row['id']}  {real_dur/60:.1f}m (over 5m cap)")
+            stats["rejected"] += 1
+            continue
         rel = os.path.relpath(res.path, config.ROOT)
         if res.info_path and os.path.exists(res.info_path):
             os.makedirs(meta_dir, exist_ok=True)

@@ -9,11 +9,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DEFAULTS = {
     "general": {
-        "budget_gib": 15.0,      # hard ceiling for downloaded media
+        "budget_gib": 10.0,      # hard ceiling for downloaded media
         "target_count": 100,     # stop after this many videos
         "max_attempts": 3,
         "min_duration_s": 3,
-        "max_duration_s": 3600,
+        "max_duration_s": 300,   # 5 minutes — the whole point of the collection
         "concurrency": 1,        # downloads are sequential on purpose (be polite)
     },
     "video": {

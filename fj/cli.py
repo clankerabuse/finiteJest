@@ -131,14 +131,18 @@ def cmd_harvest(args):
 
 def cmd_probe(args):
     cfg = _cfg(args)
+    if getattr(args, "max_duration", None):
+        cfg["general"]["max_duration_s"] = args.max_duration
     db = _db(cfg)
     kept = pipeline.run_probe(db, cfg, limit=args.limit)
-    print(f"\n{kept} probed and kept")
+    print(f"\n{kept} probed")
     _banner(cfg, db)
 
 
 def cmd_fetch(args):
     cfg = _cfg(args)
+    if getattr(args, "max_duration", None):
+        cfg["general"]["max_duration_s"] = args.max_duration
     db = _db(cfg)
     _banner(cfg, db)
     pipeline.run_fetch(db, cfg, limit=args.limit,
@@ -294,6 +298,7 @@ def build_parser():
 
     s = sub.add_parser("probe", help="enrich + quality-gate candidates")
     s.add_argument("--limit", type=int)
+    s.add_argument("--max-duration", type=int, help="override the 5m cap (seconds)")
     s.set_defaults(fn=cmd_probe)
 
     s = sub.add_parser("fetch", help="download until budget/count is reached")
@@ -301,6 +306,7 @@ def build_parser():
     s.add_argument("--id", type=int, action="append", help="fetch specific row(s) by id")
     s.add_argument("--count", type=int, help="target number of videos")
     s.add_argument("--budget", help="e.g. 15G")
+    s.add_argument("--max-duration", type=int, help="override the 5m cap (seconds)")
     s.add_argument("--dry-run", action="store_true")
     s.add_argument("--thumbs", dest="thumbs", action="store_true", default=None)
     s.add_argument("--no-thumbs", dest="thumbs", action="store_false")
