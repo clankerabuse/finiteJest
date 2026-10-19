@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import time
+import urllib.parse
 
 from . import config, ytdlp
 from .util import (ffprobe, gib, human_size, sha256_file, now_iso)
@@ -47,8 +48,20 @@ def enrich(row, info: dict, cfg: dict, verdict: str, reason: str | None,
     widths = [f.get("width") for f in (info.get("requested_formats") or []) if f.get("width")]
     heights = [f.get("height") for f in (info.get("requested_formats") or []) if f.get("height")]
     desc = (info.get("description") or "")[:4000]
+
+    # direct-file extractors call every video by its filename (often an md5 or
+    # a 4chan tim); keep the human title the adapter already gave us
+    probe_title = (info.get("title") or "").strip()
+    url_base = os.path.splitext(os.path.basename(
+        urllib.parse.urlsplit(row["source_url"]).path))[0]
+    if row["title"] and (not probe_title or probe_title == url_base
+                         or len(probe_title) < 3):
+        title = row["title"]
+    else:
+        title = probe_title or row["title"]
+
     return {
-        "title": info.get("title") or row["title"],
+        "title": title,
         "uploader": info.get("uploader") or info.get("channel") or row["uploader"],
         "duration": info.get("duration") or row["duration"],
         "published": info.get("upload_date") or row["published"],

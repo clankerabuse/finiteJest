@@ -117,6 +117,17 @@ def cmd_harvest(args):
             sys.exit("need a channel/playlist/search URL")
         print(f"harvesting playlist · {args.query}")
         rows = src.harvest(cfg, args.query, limit=args.limit, tag=args.tag)
+    elif args.source == "fourchan":
+        board = args.query or (cfg.get("fourchan", {}).get("boards") or ["wsg"])[0]
+        print(f"harvesting /{board}/ · {args.threads} threads · filter {args.filter or 'none'}")
+        rows = src.harvest(cfg, board=board, filter=args.filter,
+                           limit=args.limit, threads=args.threads)
+    elif args.source == "booru":
+        if not args.query:
+            sys.exit("need a booru base URL, e.g. https://e621.net")
+        print(f"harvesting booru · {args.query} · tags {args.tags or '(none)'}")
+        rows = src.harvest(cfg, args.query, tags=args.tags or "",
+                           limit=args.limit, page=args.page or 0)
     elif args.source == "list":
         if not args.query:
             sys.exit("need a file path")
@@ -261,6 +272,8 @@ def cmd_sources(args):
     print("  reddit    r/<sub> top/hot/new       needs a free reddit script app for OAuth")
     print("  archive   archive.org advancedsearch")
     print("  playlist  any yt-dlp channel/playlist/search URL (flat)")
+    print("  fourchan  /<board>/ webm+mp4 posts  (default wsG, 1 req/sec)")
+    print("  booru     gelbooru/danbooru/e621 API by base URL")
     print("  list      text file of URLs")
     print("\nreddit creds:", "set" if cfg["reddit"]["client_id"] else "missing (see README)")
     print("yt-dlp:", ytdlp.version())
@@ -294,6 +307,10 @@ def build_parser():
     s.add_argument("--collection", help="archive.org collection id")
     s.add_argument("--sort-archive", default="downloads",
                    help="archive sort: downloads|recent|oldest|random")
+    s.add_argument("--filter", help="fourchan: thread subject substring")
+    s.add_argument("--threads", type=int, default=12, help="fourchan: threads to scan")
+    s.add_argument("--tags", help="booru: search tags")
+    s.add_argument("--page", type=int, default=0, help="booru: page offset")
     s.set_defaults(fn=cmd_harvest)
 
     s = sub.add_parser("probe", help="enrich + quality-gate candidates")

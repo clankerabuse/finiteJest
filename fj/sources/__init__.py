@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 from .base import Candidate, harvest
-from . import reddit, archive, playlist, listfile
+from . import reddit, archive, playlist, listfile, fourchan, booru
 
 ADAPTERS = {
     "reddit": reddit,
     "archive": archive,
     "playlist": playlist,
     "list": listfile,
+    "fourchan": fourchan,
+    "booru": booru,
 }
 
 

@@ -38,4 +38,14 @@ assert pipeline.gate({**keep, "ext": "m4a", "vcodec": "none"}, cfg)[0] == "rejec
 assert pipeline.gate({**keep, "filesize": 900 * 1024 ** 2}, cfg)[0] == "reject"
 assert pipeline.gate({**keep, "availability": "private"}, cfg)[0] == "reject"
 
+# --- adapter helpers (no network)
+from fj.sources import fourchan, booru
+
+assert fourchan._name("old jakarta soul", "SEA thread", "wsg", 123456789) == "old jakarta soul"
+assert fourchan._name("1782260877440533", "SEA thread", "wsg", 1782260877440533).endswith("440533")
+assert fourchan._name(None, "", "wsg", 42) == "/wsg/ 42"
+assert booru._tag_str("a b  c") == "a, b, c"
+assert booru._tag_str("a, b, c") == "a, b, c"
+assert booru._title("e621.net", 7, "x") == "e621.net #7"
+
 print("util/gate tests: ok")

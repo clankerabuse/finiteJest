@@ -25,6 +25,16 @@ user_agent = "linux:finitejest:0.1 (personal video archive)"
 min_score = 25
 subreddits = ["DeepIntoYoutube"]
 
+[fourchan]
+boards = ["wsg"]        # default board(s); wsg = worksafe webms, per its own banner
+threads = 12            # threads scanned per harvest (1 request/second)
+min_replies = 0
+
+[booru]
+# Cloudflare-walled boorus (soybooru, danbooru, rule34) refuse non-browser
+# clients. If you have a live session, paste the raw Cookie header here.
+cookie = ""
+
 [paths]
 videos  = "data/videos"
 meta    = "data/meta"

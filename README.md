@@ -15,6 +15,8 @@ harvest ─► candidate rows ─► probe (metadata + quality gate) ─► down
 ```bash
 cd ~/Projects/finiteJest
 bin/fj init
+bin/fj harvest fourchan wsg --limit 40 --threads 6      # live webm/mp4 dumps
+bin/fj harvest booru https://e621.net --tags "webm" --limit 30
 bin/fj harvest archive --collection prelinger --limit 50
 bin/fj harvest playlist "https://www.youtube.com/@SomeWeirdChannel/videos" --limit 40
 bin/fj fetch --dry-run          # see what passes the gate
@@ -38,6 +40,8 @@ bin/fj add --file queue/links.txt --source list
 | `init` | create dirs + sqlite db |
 | `add URL...` | queue specific URLs (`--probe` to enrich now) |
 | `harvest reddit SUB` | pull posts from a subreddit (`--sort top --timeframe all`) |
+| `harvest fourchan BOARD` | scan live threads for webm/mp4 (`--threads`, `--filter "webm dump"`) |
+| `harvest booru URL` | gelbooru-v0.2 / danbooru / e621 API (`--tags`, `--page`) |
 | `harvest archive` | archive.org search (`--query`, `--collection`, `--sort`) |
 | `harvest playlist URL` | any channel/playlist/search URL yt-dlp understands |
 | `harvest list FILE` | one URL per line |
@@ -61,6 +65,38 @@ bin/fj add --file queue/links.txt --source list
 
 Everything the gate rejects stays in the db with a reason, so `fj ls -e` is a
 record of what you passed on.
+
+## 4chan + boorus
+
+**4chan** uses the public JSON API (`a.4cdn.org`): catalog → threads → any post
+with `tim`+`ext` of `.webm`/`.mp4` becomes a candidate, media straight from
+`i.4cdn.org`. One request per second, and threads expire within days, so harvest
+often — the url_key makes repeats free. `/wsg/` is nominally worksafe but
+reposts from other boards; pick boards you trust, because nothing downstream can
+judge content for you.
+
+```
+bin/fj harvest fourchan wsg --limit 60 --threads 8
+bin/fj harvest fourchan wsg --filter "webm dump" --limit 100
+```
+
+Set default boards under `[fourchan] boards = [...]` in `config.toml`.
+
+**Boorus** expose a post = file_url + tags; the adapter auto-detects the API
+flavour (danbooru `posts.json`, gelbooru v0.2 `dapi`, e621 `posts.json`) and
+keeps only video files (`webm/mp4/m4v/mov`), scanning a few pages because most
+results are stills.
+
+```
+bin/fj harvest booru https://e621.net --tags "webm" --limit 40
+bin/fj harvest booru https://xbooru.com --tags "webm" --limit 40
+bin/fj harvest booru https://danbooru.donmai.us --tags "filetype:webm" --limit 40
+```
+
+`soybooru.com`, danbooru and rule34 sit behind Cloudflare and answer 403 to any
+script (verified). If you have a browser session, paste the raw `Cookie:` header
+into `[booru] cookie` and requests will carry it; otherwise `gallery-dl`-style
+cookie export is the only way in. The adapter is ready for it either way.
 
 ## Reddit
 
