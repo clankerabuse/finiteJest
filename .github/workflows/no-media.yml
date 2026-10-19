@@ -1,0 +1,23 @@
+name: no-media
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tooling-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if any media or generated data is tracked
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files | grep -Ei '\.(mp4|m4v|mov|webm|mkv|avi|flv|ogv|mpeg|mpg|wmv|gif|webp|jpe?g|png|bmp|mp3|m4a|wav|flac|opus|ogg)$' || true)
+          gen=$(git ls-files 'data/*' | grep -v '^data/\.gitkeep$' || true)
+          big=$(git ls-files -z | xargs -0 -r du -k 2>/dev/null | awk '$1 > 5120 {print $2}' || true)
+          if [ -n "$bad$gen$big" ]; then
+            echo "This repo carries tooling only. Offending paths:"
+            printf '%s\n' "$bad" "$gen" "$big" | sed '/^$/d'
+            exit 1
+          fi
+          echo "clean: no media, no generated data, nothing over 5 MiB"

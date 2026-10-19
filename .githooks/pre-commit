@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Refuse to commit media or oversized files. Enable once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+
+MEDIA_RE='\.(mp4|m4v|mov|webm|mkv|avi|flv|ogv|mpeg|mpg|wmv|gif|webp|jpe?g|png|bmp|mp3|m4a|wav|flac|opus|ogg)$'
+LIMIT=$((5 * 1024 * 1024))   # 5 MiB
+blocked=0
+
+while IFS= read -r -d '' f; do
+  lower="${f,,}"
+  if [[ "$lower" =~ $MEDIA_RE ]]; then
+    echo "pre-commit: refusing media file: $f" >&2
+    blocked=1
+    continue
+  fi
+  if [[ "$lower" == data/* && "$lower" != "data/.gitkeep" ]]; then
+    echo "pre-commit: refusing generated file: $f" >&2
+    blocked=1
+    continue
+  fi
+  if [[ -f "$f" ]]; then
+    size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+    if (( size > LIMIT )); then
+      echo "pre-commit: refusing file larger than 5 MiB: $f ($size bytes)" >&2
+      blocked=1
+    fi
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+
+if (( blocked )); then
+  echo "" >&2
+  echo "pre-commit: aborted — this repo carries tooling only." >&2
+  echo "             run 'git reset <path>' to unstage, or add to .gitignore." >&2
+  exit 1
+fi
+exit 0

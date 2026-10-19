@@ -1,14 +1,45 @@
-# media + database stay local; only the catalog is committed
+# ---------------------------------------------------------------- media
+# Never committed, whatever directory it lands in. The collection lives in
+# data/videos/ on this machine; git only ever carries the tooling.
+*.mp4
+*.m4v
+*.mov
+*.webm
+*.mkv
+*.avi
+*.flv
+*.ogv
+*.mpeg
+*.mpg
+*.wmv
+*.gif
+*.webp
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.opus
+*.ogg
+
+# ---------------------------------------------------------------- generated
+# manifest, yt-dlp sidecars, quarantined files, review stills
 data/*
 !data/.gitkeep
 
-# python
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# yt-dlp leftovers
+# ---------------------------------------------------------------- leftovers
 *.part
 *.ytdl
 *.temp
+*.tmp
+
+# ---------------------------------------------------------------- python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
