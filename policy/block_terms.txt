@@ -1,0 +1,9 @@
+# Hard block: if any of these appear in a title, tag, filename or note the item
+# is recorded as `blocked` and never fetched. Keep entries specific — a bare
+# word like "child" would match "childhood" and bury real finds.
+csam
+child porn
+childporn
+child sexual abuse
+child abuse material
+cp link

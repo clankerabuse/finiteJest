@@ -50,6 +50,9 @@ bin/fj add --file queue/links.txt --source list
 | `ls` | list rows (`--status`, `-e` for reasons, `--json`) |
 | `stats` | counts, bytes, per-source totals |
 | `verify` | check files still exist / sizes match |
+| `scan` | re-run the byte scanner on files already in the collection |
+| `review` | list quarantined files with reasons (`--frames` for stills) |
+| `approve` / `reject` | promote / discard a quarantined file |
 | `requeue` | put failed/skipped rows back in the queue |
 | `export` | write the committable catalog |
 | `show` / `rm` | inspect / remove a row (`rm --purge` deletes the file) |
@@ -65,6 +68,39 @@ bin/fj add --file queue/links.txt --source list
 
 Everything the gate rejects stays in the db with a reason, so `fj ls -e` is a
 record of what you passed on.
+
+## Safety screening
+
+Every download is screened before it can enter the collection (`fj/safety.py`),
+because 4chan and boorus are unmoderated.
+
+- **text** — `policy/block_terms.txt` is a hard block: matching items are never
+  fetched and are recorded as `blocked` with the term that caught them.
+  `policy/flag_terms.txt` queues normally but guarantees a quarantine later.
+  Both match title, tags and notes, at harvest time and again after probing.
+- **bytes** — container sniffing (a zip/HTML/ELF wearing `.mp4` fails), an
+  embedded-payload scan (anything appended to a real video fails), ffprobe
+  structure (must contain a video stream, sane dimensions, real duration),
+  bitrate sanity, and the 5-minute cap re-read from the file itself.
+
+Failures and flags move to `data/quarantine/` with status `quarantined` and stay
+out of `collection/index.*` until you act:
+
+```bash
+bin/fj review              # what's waiting, and why
+bin/fj review --frames     # + three extracted stills per file
+bin/fj approve 12          # move into the collection, mark done, re-export
+bin/fj reject 12 --purge   # delete it, record the block
+bin/fj scan --quarantine   # re-scan everything already collected
+```
+
+`[safety] require_review = true` makes *every* download wait for approval.
+
+What this cannot do: tell you what is in the picture. Detecting illegal imagery
+needs hash matching against NCMEC/PhotoDNA-style databases, which is an
+organisational partnership rather than a library. The scanner catches malformed,
+disguised, audio-only, over-long and text-flagged files and makes a human look
+at anything doubtful — source hygiene is still the primary control.
 
 ## 4chan + boorus
 

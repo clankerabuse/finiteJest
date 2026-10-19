@@ -1,0 +1,13 @@
+# Review flag: these queue normally but land in quarantine after download,
+# never in the collection, until `fj approve <id>`. Anime-board vocabulary is
+# included because it is the usual camouflage for the hard-block category.
+lolicon
+shotacon
+loli
+shota
+underage
+preteen
+pre teen
+jailbait
+pedo
+pedophile

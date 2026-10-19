@@ -46,9 +46,12 @@ moved or changed software).
 
 ## A note on 4chan/booru content
 
-These are unmoderated uploads. The pipeline cannot tell you what a file
-contains: skip boards/tags you don't trust, and treat anything you pull as
-something you chose to keep.
+These are unmoderated uploads. Every item is screened before it enters the
+collection: text policy at harvest/probe (`policy/*.txt`), then container,
+embedded-payload and ffprobe checks on the finished file, with failures and
+flags landing in `data/quarantine/` until `fj approve`. The pipeline cannot tell
+you what is in the picture — skip boards/tags you don't trust, and treat
+anything you pull as something you chose to keep.
 
 ## Harvest etiquette
 

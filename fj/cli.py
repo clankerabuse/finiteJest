@@ -6,8 +6,8 @@ import os
 import shutil
 import sys
 
-from . import config, db as dbmod, export as exportmod, pipeline, sources, ytdlp
-from .util import canonical_key, fmt_duration, human_size, parse_size, slug
+from . import config, db as dbmod, export as exportmod, pipeline, safety, sources, ytdlp
+from .util import canonical_key, fmt_duration, human_size, now_iso, parse_size, slug
 
 
 def _cfg(args):
@@ -22,17 +22,22 @@ def _banner(cfg, db):
     c = db.counts()
     used = db.bytes_done()
     budget = int(cfg["general"]["budget_gib"] * 1024 ** 3)
+    extra = ""
+    if c.get("quarantined"):
+        extra += f" · {c['quarantined']} QUARANTINED"
+    if c.get("blocked"):
+        extra += f" · {c['blocked']} blocked"
     print(f"finiteJest · {c.get('done', 0)}/{cfg['general']['target_count']} videos · "
           f"{human_size(used)}/{human_size(budget)} · "
           f"{c.get('candidate', 0)} candidates · {c.get('probed', 0)} ready · "
-          f"{c.get('failed', 0)} failed")
+          f"{c.get('failed', 0)} failed" + extra)
 
 
 # ------------------------------------------------------------------ commands
 def cmd_init(args):
     cfg = _cfg(args)
     db = _db(cfg)
-    for key in ("videos", "meta", "exports"):
+    for key in ("videos", "meta", "quarantine", "exports"):
         os.makedirs(config.path(cfg, key), exist_ok=True)
     _banner(cfg, db)
     print("yt-dlp:", ytdlp.version())
@@ -41,7 +46,7 @@ def cmd_init(args):
 
 
 def _add_rows(db, rows, probes=False, cfg=None, tag=None, verbose=True):
-    added = dup = 0
+    added = dup = blocked = 0
     ids = []
     for r in rows:
         url = r.get("url")
@@ -54,6 +59,14 @@ def _add_rows(db, rows, probes=False, cfg=None, tag=None, verbose=True):
         if tag:
             tags.append(tag)
         r["tags"] = ",".join(dict.fromkeys(t.strip() for t in tags if t.strip()))
+        if cfg is not None:
+            tv, hits = safety.screen_text(cfg, r.get("title"), r.get("tags"), r.get("note"))
+            if tv == "blocked":
+                r["status"] = "blocked"
+                r["error"] = "text: " + ", ".join(hits)
+                blocked += 1
+            elif tv == "review":
+                r["note"] = ((r.get("note") or "") + " · review: " + ", ".join(hits)).strip(" ·")
         vid, created = db.add(r)
         if created:
             added += 1
@@ -61,7 +74,10 @@ def _add_rows(db, rows, probes=False, cfg=None, tag=None, verbose=True):
         else:
             dup += 1
     if verbose:
-        print(f"added {added}, {dup} already known")
+        msg = f"added {added}, {dup} already known"
+        if blocked:
+            msg += f", {blocked} blocked by policy"
+        print(msg)
     if probes and cfg:
         for vid in ids:
             row = db.get(vid)
@@ -86,8 +102,7 @@ def cmd_add(args):
     if not rows:
         _banner(cfg, db)
         return
-    _add_rows(db, rows, probes=args.probe, cfg=cfg if args.probe else None,
-              tag=args.tag)
+    _add_rows(db, rows, probes=args.probe, cfg=cfg, tag=args.tag)
     _banner(cfg, db)
 
 
@@ -136,7 +151,7 @@ def cmd_harvest(args):
         sys.exit(f"unknown source: {args.source}")
 
     print(f"found {len(rows)} candidate links")
-    _add_rows(db, rows, tag=args.tag)
+    _add_rows(db, rows, cfg=cfg, tag=args.tag)
     _banner(cfg, db)
 
 
@@ -279,6 +294,86 @@ def cmd_sources(args):
     print("yt-dlp:", ytdlp.version())
 
 
+def cmd_scan(args):
+    """Re-run the byte scanner over files already on disk."""
+    cfg = _cfg(args)
+    db = _db(cfg)
+    rows = db.rows(status=args.status, order="id ASC")
+    verdicts = {"ok": 0, "flag": 0, "fail": 0}
+    for r in rows:
+        if not r["path"]:
+            continue
+        p = r["path"] if os.path.isabs(r["path"]) else os.path.join(config.ROOT, r["path"])
+        if not os.path.exists(p):
+            db.update(r["id"], status="missing", error="file gone")
+            print(f"  missing #{r['id']} {r['path']}")
+            continue
+        res = safety.scan(p, cfg)
+        verdicts[res.verdict] += 1
+        if res.verdict != "ok" or args.verbose:
+            print(f"  {res.verdict:<4} #{r['id']:<5} {human_size(res.size):>9}  {res.reason[:90]}")
+        if res.verdict != "ok" and args.quarantine:
+            q = safety.quarantine(p, cfg, r["source"], res.reason)
+            db.update(r["id"], status="quarantined", path=q,
+                      error=f"{res.verdict}: {res.reason}")
+            print(f"        -> quarantined {q}")
+    print(f"\n{verdicts['ok']} clean · {verdicts['flag']} flagged · {verdicts['fail']} failed")
+
+
+def cmd_review(args):
+    """Show what is waiting for a human, with optional frames for eyeballing."""
+    cfg = _cfg(args)
+    db = _db(cfg)
+    rows = db.rows(status="quarantined", order="id ASC")
+    if not rows:
+        print("quarantine empty")
+        return
+    for r in rows:
+        print(f"#{r['id']:<5} {human_size(r['filesize']):>9}  {r['source']:<9} "
+              f"{(r['title'] or '')[:50]}")
+        print(f"       {r['error'] or 'no reason recorded'}")
+        print(f"       {r['path']}")
+        print(f"       {r['source_url']}")
+        if args.frames:
+            for f in safety.frames(r["path"], cfg):
+                print(f"       frame: {f}")
+    print(f"\n{len(rows)} awaiting review · approve with `bin/fj approve <id>`, "
+          f"discard with `bin/fj reject <id>`")
+
+
+def cmd_approve(args):
+    cfg = _cfg(args)
+    db = _db(cfg)
+    r = db.get(args.id)
+    if not r:
+        sys.exit(f"no row #{args.id}")
+    if r["status"] != "quarantined":
+        sys.exit(f"#{args.id} is {r['status']}, not quarantined")
+    src = r["path"] if os.path.isabs(r["path"]) else os.path.join(config.ROOT, r["path"])
+    if not os.path.exists(src):
+        sys.exit(f"file missing: {r['path']}")
+    rel = safety.restore(src, cfg, r["source"])
+    db.update(r["id"], status="done", path=rel, error=None,
+              fetched_at=r["fetched_at"] or now_iso())
+    print(f"approved #{args.id} -> {rel}")
+    for p in exportmod.export(db, cfg):
+        print("wrote", os.path.relpath(p, config.ROOT))
+
+
+def cmd_reject(args):
+    cfg = _cfg(args)
+    db = _db(cfg)
+    r = db.get(args.id)
+    if not r:
+        sys.exit(f"no row #{args.id}")
+    p = r["path"] if os.path.isabs(r["path"]) else os.path.join(config.ROOT, r["path"] or "")
+    if args.purge and p and os.path.exists(p):
+        os.unlink(p)
+        print("deleted", r["path"])
+    db.update(r["id"], status="blocked", error=(r["error"] or "") + " · rejected by reviewer")
+    print(f"rejected #{args.id}")
+
+
 # ------------------------------------------------------------------ parser
 def build_parser():
     p = argparse.ArgumentParser(prog="fj", description="finiteJest video farm")
@@ -363,6 +458,25 @@ def build_parser():
 
     s = sub.add_parser("sources", help="show adapters and cred status")
     s.set_defaults(fn=cmd_sources)
+
+    s = sub.add_parser("scan", help="re-scan files already on disk")
+    s.add_argument("--status", default="done", help="row status to scan (default done)")
+    s.add_argument("--quarantine", action="store_true", help="move failures to quarantine")
+    s.add_argument("-v", "--verbose", action="store_true", help="print clean files too")
+    s.set_defaults(fn=cmd_scan)
+
+    s = sub.add_parser("review", help="list quarantined files for human review")
+    s.add_argument("--frames", action="store_true", help="extract 3 review frames per file")
+    s.set_defaults(fn=cmd_review)
+
+    s = sub.add_parser("approve", help="promote a quarantined file into the collection")
+    s.add_argument("id", type=int)
+    s.set_defaults(fn=cmd_approve)
+
+    s = sub.add_parser("reject", help="discard a quarantined row")
+    s.add_argument("id", type=int)
+    s.add_argument("--purge", action="store_true", help="delete the file too")
+    s.set_defaults(fn=cmd_reject)
     return p
 
 

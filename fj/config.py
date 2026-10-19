@@ -32,9 +32,19 @@ DEFAULTS = {
         "min_score": 25,
         "subreddits": [],             # default harvest list
     },
+    "booru": {
+        "cookie": "",
+    },
+    "safety": {
+        "block_terms": "policy/block_terms.txt",
+        "flag_terms": "policy/flag_terms.txt",
+        "require_review": False,   # true = quarantine every download until approved
+        "max_bitrate_mbps": 100,
+    },
     "paths": {
         "videos": "data/videos",
         "meta": "data/meta",
+        "quarantine": "data/quarantine",
         "exports": "collection",
         "db": "data/finitejest.db",
     },

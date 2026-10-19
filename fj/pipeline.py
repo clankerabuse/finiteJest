@@ -5,8 +5,8 @@ import os
 import time
 import urllib.parse
 
-from . import config, ytdlp
-from .util import (ffprobe, gib, human_size, sha256_file, now_iso)
+from . import config, safety, ytdlp
+from .util import gib, human_size, now_iso
 
 AUDIO_EXT = {"m4a", "mp3", "opus", "ogg", "flac", "wav", "aac"}
 BAD_AVAILABILITY = {"private", "premium_only", "subscriber_only", "needs_auth",
@@ -89,6 +89,17 @@ def probe_one(db, row, cfg, verbose=True) -> dict | None:
         return None
     verdict, reason, est = gate(info, cfg)
     db.update(row["id"], **enrich(row, info, cfg, verdict, reason, est))
+    # second look with the metadata we just learned (tags/title often carry the
+    # only signal a script can act on)
+    if row["tags"] or info.get("title"):
+        tv, hits = safety.screen_text(cfg, info.get("title"), row["tags"], row["note"])
+        if tv == "blocked":
+            db.update(row["id"], status="blocked", error="text: " + ", ".join(hits))
+            if verbose:
+                print(f"  BLOCK #{row['id']}  text: {', '.join(hits)[:80]}")
+            return info
+        if tv == "review":
+            db.update(row["id"], note=(row["note"] or "") + " · review: " + ", ".join(hits))
     if verbose:
         mark = "ok " if verdict == "keep" else "skip"
         extra = f" — {reason}" if reason else ""
@@ -125,7 +136,8 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
     rows = ([(r) for r in (db.get(i) for i in ids) if r] if ids else
             db.due(limit=limit, max_attempts=int(cfg["general"]["max_attempts"])))
     started = time.time()
-    stats = {"done": 0, "rejected": 0, "skipped": 0, "failed": 0, "bytes": 0}
+    stats = {"done": 0, "rejected": 0, "skipped": 0, "failed": 0, "bytes": 0,
+             "quarantined": 0}
 
     for row in rows:
         if done >= target:
@@ -200,7 +212,31 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
             stats["skipped"] += 1
             continue
 
-        digest = sha256_file(res.path)
+        # --- screen the bytes before anything is allowed into the collection
+        scan = safety.scan(res.path, cfg)
+        verdict = scan.verdict
+        hits: list[str] = []
+        if verdict != "fail":
+            tverdict, hits = safety.screen_text(cfg, row["title"], row["tags"], row["note"])
+            if tverdict == "blocked":
+                verdict = "fail"
+                scan.findings.append("text: " + ", ".join(hits))
+            elif tverdict == "review":
+                verdict = "flag" if verdict == "ok" else verdict
+                scan.findings.append("text: " + ", ".join(hits))
+
+        if verdict != "ok":
+            qpath = safety.quarantine(res.path, cfg, row["source"], scan.reason)
+            db.update(row["id"], status="quarantined", path=qpath, sha256=scan.sha256,
+                      filesize=scan.size, duration=scan.duration or row["duration"],
+                      width=scan.width, height=scan.height,
+                      error=f"{verdict}: {scan.reason}")
+            label = "QUARANTINE" if verdict == "fail" else "review"
+            print(f"  {label}  #{row['id']}  {scan.reason[:90]}")
+            stats["quarantined"] += 1
+            continue
+
+        digest = scan.sha256
         dup = db.conn.execute(
             "SELECT id FROM videos WHERE sha256 = ? AND id != ? AND status='done'",
             (digest, row["id"])).fetchone()
@@ -212,19 +248,6 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
             stats["skipped"] += 1
             continue
 
-        probe_meta = ffprobe(res.path)
-
-        # second duration check: HLS/unknown-length extractors only reveal the
-        # real runtime once the file is on disk
-        real_dur = probe_meta.get("duration") or row["duration"]
-        max_dur = int(cfg["general"]["max_duration_s"])
-        if real_dur and real_dur > max_dur:
-            os.unlink(res.path)
-            db.update(row["id"], status="rejected", duration=real_dur,
-                      error=f"too long after download ({real_dur/60:.1f}m > {max_dur/60:.0f}m)")
-            print(f"  drop  #{row['id']}  {real_dur/60:.1f}m (over 5m cap)")
-            stats["rejected"] += 1
-            continue
         rel = os.path.relpath(res.path, config.ROOT)
         if res.info_path and os.path.exists(res.info_path):
             os.makedirs(meta_dir, exist_ok=True)
@@ -236,9 +259,9 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
 
         db.update(row["id"], status="done", path=rel, filesize=size, sha256=digest,
                   ext=os.path.splitext(res.path)[1].lstrip("."),
-                  duration=probe_meta.get("duration") or row["duration"],
-                  width=probe_meta.get("width") or row["width"],
-                  height=probe_meta.get("height") or row["height"],
+                  duration=scan.duration or row["duration"],
+                  width=scan.width or row["width"],
+                  height=scan.height or row["height"],
                   fetched_at=now_iso(), error=None)
         used += size
         done += 1
@@ -251,6 +274,7 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
         mins = (time.time() - started) / 60
         print(f"\n{stats['done']} saved · {stats['rejected']} rejected · "
               f"{stats['skipped']} skipped · {stats['failed']} failed · "
+              f"{stats['quarantined']} quarantined · "
               f"{human_size(stats['bytes'])} in {mins:.1f} min")
         print(f"collection: {done} videos, {human_size(used)} / {human_size(budget)}")
     return stats

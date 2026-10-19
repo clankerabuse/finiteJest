@@ -35,8 +35,15 @@ min_replies = 0
 # clients. If you have a live session, paste the raw Cookie header here.
 cookie = ""
 
+[safety]
+block_terms = "policy/block_terms.txt"   # hard block: never fetched
+flag_terms  = "policy/flag_terms.txt"    # soft flag: quarantined after download
+require_review = false                   # true = every download waits for `fj approve`
+max_bitrate_mbps = 100                   # flag absurd sizes-per-second
+
 [paths]
-videos  = "data/videos"
-meta    = "data/meta"
-exports = "collection"
-db      = "data/finitejest.db"
+videos     = "data/videos"
+meta       = "data/meta"
+quarantine = "data/quarantine"
+exports    = "collection"
+db         = "data/finitejest.db"
