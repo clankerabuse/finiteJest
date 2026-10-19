@@ -1,0 +1,2 @@
+# drop-in lists of URLs, one per line; see SOURCES.md
+#   bin/fj add --file queue/links.txt --source list

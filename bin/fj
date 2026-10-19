@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# fj — run the pipeline from anywhere.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.."
+exec python3 -m fj "$@"

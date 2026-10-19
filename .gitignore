@@ -1,0 +1,14 @@
+# media + database stay local; only the catalog is committed
+data/*
+!data/.gitkeep
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# yt-dlp leftovers
+*.part
+*.ytdl
+*.temp
