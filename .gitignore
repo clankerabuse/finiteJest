@@ -30,6 +30,11 @@
 data/*
 !data/.gitkeep
 
+# exported catalog carries real titles/source URLs of what was collected:
+# local provenance record only, never published
+collection/index.md
+collection/index.json
+
 # ---------------------------------------------------------------- leftovers
 *.part
 *.ytdl

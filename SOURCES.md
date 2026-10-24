@@ -57,4 +57,4 @@ anything you pull as something you chose to keep.
 
 - 1 download at a time, `--limit` on every harvest, and a hard byte budget.
 - Re-running a harvest is safe: dedupe is by canonical URL key, then by sha256.
-- Keep `collection/index.md` in git; it's the provenance record.
+- Regenerate `collection/index.md` with `bin/fj export` for the provenance record; it stays local (gitignored), never published.

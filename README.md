@@ -22,7 +22,7 @@ bin/fj harvest playlist "https://www.youtube.com/@SomeWeirdChannel/videos" --lim
 bin/fj fetch --dry-run          # see what passes the gate
 bin/fj fetch                    # download until 100 videos / 10 GiB
 bin/fj stats
-bin/fj export                   # writes collection/index.{md,json} — commit these
+bin/fj export                   # writes collection/index.{md,json} — local catalog
 ```
 
 Add one-offs by hand:
@@ -54,7 +54,7 @@ bin/fj add --file queue/links.txt --source list
 | `review` | list quarantined files with reasons (`--frames` for stills) |
 | `approve` / `reject` | promote / discard a quarantined file |
 | `requeue` | put failed/skipped rows back in the queue |
-| `export` | write the committable catalog |
+| `export` | write the local catalog (`collection/index.*`) |
 | `show` / `rm` | inspect / remove a row (`rm --purge` deletes the file) |
 
 ## Quality gate (config.toml)
@@ -158,21 +158,26 @@ fj/                the pipeline (cli, db, ytdlp, gate, sources/)
 data/videos/<src>/ media, gitignored  (10 GiB cap, ~100 MB avg)
 data/meta/         yt-dlp .info.json sidecars
 data/finitejest.db manifest (sqlite)
-collection/        index.md + index.json — the part that goes in git
+collection/        index.md + index.json — your local catalog (gitignored)
 queue/             drop-in link lists
 ```
 
 Media is deliberately **not** in git: 10 GiB of mp4 in a repo is unusable.
-The repo tracks the pipeline + catalog (titles, source URLs, sizes, sha256), so
-the collection is reproducible and shareable; add a torrent or IPFS step when
-you actually want to ship bytes.
+The exported catalog (`collection/index.*`) stays local too — it is a record of
+what was collected, titles and source URLs included, so it is gitignored rather
+than published. `data/` and the catalog are reproducible from the manifest.
 
-Three guards keep it that way: media extensions plus `data/*` in `.gitignore`,
-a `pre-commit` hook in `.githooks/` that refuses media or files over 5 MiB even
-when force-added, and a `no-media` GitHub Action that fails the build if such a
-file ever reaches the tree.
+Four guards keep it that way: media extensions plus `data/*` and
+`collection/index.*` in `.gitignore`, a `pre-commit` hook in `.githooks/` that
+refuses media, generated data, the catalog or files over 5 MiB even when
+force-added, and a `no-media` GitHub Action that fails the build if any of them
+ever reaches the tree.
 
 ## Notes / next
 
 See `SOURCES.md` for the source shortlist and which adapters still need wiring
 (tiktok/vimeo/4chan-shaped things, ubuweb, wikimedia, local-TV archives).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
