@@ -225,6 +225,12 @@ def run_fetch(db, cfg, limit: int | None = None, budget: int | None = None,
                 verdict = "flag" if verdict == "ok" else verdict
                 scan.findings.append("text: " + ", ".join(hits))
 
+        # [safety] require_review is a manual gate: a clean file still waits in
+        # quarantine for `fj approve` instead of landing in the collection
+        if verdict == "ok" and bool((cfg.get("safety") or {}).get("require_review")):
+            verdict = "flag"
+            scan.findings.append("review required ([safety] require_review)")
+
         if verdict != "ok":
             qpath = safety.quarantine(res.path, cfg, row["source"], scan.reason)
             db.update(row["id"], status="quarantined", path=qpath, sha256=scan.sha256,
